@@ -1008,6 +1008,7 @@ ssize_t AsyncConnection::_process_connection()
         }
 
         center->delete_file_event(sd, EVENT_WRITABLE);
+        net.set_priority(sd, async_msgr->get_socket_priority());
         state = STATE_CONNECTING_WAIT_BANNER;
         break;
       }
@@ -1318,6 +1319,7 @@ ssize_t AsyncConnection::_process_connection()
           goto fail;
 
         net.set_socket_options(sd);
+        net.set_priority(sd, async_msgr->get_socket_priority());
 
         bl.append(CEPH_BANNER, strlen(CEPH_BANNER));
 
