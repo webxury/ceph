@@ -70,7 +70,7 @@ class Worker : public Thread {
   std::atomic_uint references;
   Worker(CephContext *c, WorkerPool *p, int i)
     : cct(c), pool(p), done(false), id(i), perf_logger(NULL), center(c), references(0) {
-    center.init(InitEventNumber);
+    center.init(InitEventNumber, i);
     char name[128];
     sprintf(name, "AsyncMessenger::Worker-%d", id);
     // initialize perf_logger
@@ -96,6 +96,10 @@ class Worker : public Thread {
   void *entry();
   void stop();
   PerfCounters *get_perf_counter() { return perf_logger; }
+  void release_worker() {
+    int oldref = references.fetch_sub(1);
+    assert(oldref > 0);
+  }
 };
 
 /**
@@ -162,7 +166,6 @@ class WorkerPool {
   virtual ~WorkerPool();
   void start();
   Worker *get_worker();
-  void release_worker(EventCenter* c);
   int get_cpuid(int id) {
     if (coreids.empty())
       return -1;
@@ -269,7 +272,7 @@ public:
   Connection *create_anon_connection() {
     Mutex::Locker l(lock);
     Worker *w = pool->get_worker();
-    return new AsyncConnection(cct, this, &dispatch_queue, &w->center, w->get_perf_counter());
+    return new AsyncConnection(cct, this, &dispatch_queue, w);
   }
 
   /**
@@ -528,7 +531,6 @@ public:
    */
   void unregister_conn(AsyncConnectionRef conn) {
     Mutex::Locker l(deleted_lock);
-    conn->release_worker();
     deleted_conns.insert(conn);
 
     if (deleted_conns.size() >= ReapDeadConnectionThreshold) {
@@ -544,10 +546,6 @@ public:
    * See "deleted_conns"
    */
   int reap_dead();
-  
-  void release_worker(EventCenter* c) {
-    pool->release_worker(c);
-  }
 
   /**
    * @} // AsyncMessenger Internals

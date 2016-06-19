@@ -25,6 +25,8 @@
 #include <arpa/inet.h>
 #include "include/Context.h"
 #include "include/atomic.h"
+#include "common/Mutex.h"
+#include "common/Cond.h"
 #include "global/global_init.h"
 #include "common/ceph_argparse.h"
 #include "msg/async/Event.h"
@@ -253,7 +255,7 @@ class FakeEvent : public EventCallback {
 TEST(EventCenterTest, FileEventExpansion) {
   vector<int> sds;
   EventCenter center(g_ceph_context);
-  center.init(100);
+  center.init(100, 0);
   EventCallbackRef e(new FakeEvent());
   for (int i = 0; i < 300; i++) {
     int sd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -273,7 +275,7 @@ class Worker : public Thread {
  public:
   EventCenter center;
   explicit Worker(CephContext *c): cct(c), done(false), center(c) {
-    center.init(100);
+    center.init(100, 0);
   }
   void stop() {
     done = true; 
