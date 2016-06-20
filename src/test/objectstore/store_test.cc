@@ -3763,6 +3763,106 @@ TEST_P(StoreTest, Synthetic) {
   doSyntheticTest(store);
 }
 
+void do_bluestore_matrix(const char *matrix[][10],
+			 int i, int pos, int num,
+			 boost::scoped_ptr<ObjectStore>& store) {
+  if (matrix[i][0]) {
+    int count;
+    for (count = 0; matrix[i][count+1]; ++count) ;
+    for (int j = 1; matrix[i][j]; ++j) {
+      g_conf->set_val(matrix[i][0], matrix[i][j]);
+      do_bluestore_matrix(matrix, i + 1, pos * count + j - 1, num * count,
+			  store);
+    }
+  } else {
+    cout << "---------------------- " << (pos + 1) << " / " << num
+	 << " ----------------------" << std::endl;
+    for (unsigned k=0; matrix[k][0]; ++k) {
+      char *buf;
+      g_conf->get_val(matrix[k][0], &buf, -1);
+      cout << "  " << matrix[k][0] << " = " << buf << std::endl;
+      free(buf);
+    }
+    g_ceph_context->_conf->apply_changes(NULL);
+    doSyntheticTest(store);
+  }
+}
+
+void do_matrix(const char *matrix[][10],
+	       boost::scoped_ptr<ObjectStore>& store)
+{
+  map<string,string> old;
+  for (unsigned i=0; matrix[i][0]; ++i) {
+    char *buf;
+    g_conf->get_val(matrix[i][0], &buf, -1);
+    old[matrix[i][0]] = buf;
+    free(buf);
+  }
+  cout << "saved config options " << old << std::endl;
+
+  do_bluestore_matrix(matrix, 0, 0, 1, store);
+
+  cout << "restoring config options " << old << std::endl;
+  for (auto p : old) {
+    cout << "  " << p.first << " = " << p.second << std::endl;
+    g_conf->set_val(p.first.c_str(), p.second.c_str());
+  }
+  g_ceph_context->_conf->apply_changes(NULL);
+}
+
+TEST_P(StoreTest, SyntheticMatrixCsum) {
+  if (string(GetParam()) != "bluestore")
+    return;
+
+  const char *m[][10] = {
+    { "bluestore_compression", "aggressive", "passive", 0},
+    { "bluestore_csum", "true", 0 },
+    { "bluestore_csum_type", "crc32c", "crc32c_16", "crc32c_8", "xxhash32",
+      "xxhash64", 0 },
+    { "bluestore_default_buffered_read", "true", "false", 0 },
+    { 0 },
+  };
+  do_matrix(m, store);
+}
+
+TEST_P(StoreTest, SyntheticMatrixCompression) {
+  if (string(GetParam()) != "bluestore")
+    return;
+
+  const char *m[][10] = {
+    { "bluestore_compression", "force", "aggressive", "passive", "none", 0},
+    { "bluestore_csum", "true", "false", 0 },
+    { "bluestore_default_buffered_read", "true", "false", 0 },
+    { 0 },
+  };
+  do_matrix(m, store);
+}
+
+TEST_P(StoreTest, SyntheticMatrixCompressionAlgorithm) {
+  if (string(GetParam()) != "bluestore")
+    return;
+
+  const char *m[][10] = {
+    { "bluestore_compression_algorithm", "zlib", "snappy", 0 },
+    { "bluestore_compression", "force", 0 },
+    { 0 },
+  };
+  do_matrix(m, store);
+}
+
+TEST_P(StoreTest, SyntheticMatrixNoCsum) {
+  if (string(GetParam()) != "bluestore")
+    return;
+
+  const char *m[][10] = {
+    { "bluestore_compression", "aggressive", "passive", 0},
+    { "bluestore_csum", "false", 0 },
+    { "bluestore_default_buffered_read", "true", "false", 0 },
+    { 0 },
+  };
+  do_matrix(m, store);
+}
+
 TEST_P(StoreTest, SyntheticCompressed) {
   if (string(GetParam()) != "bluestore")
     return;
