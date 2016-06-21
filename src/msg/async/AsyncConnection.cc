@@ -1031,7 +1031,7 @@ ssize_t AsyncConnection::_process_connection()
         ldout(async_msgr->cct, 10) << __func__ << " connect successfully, ready to send banner" << dendl;
 
         bufferlist bl;
-        bl.append(state_buffer, strlen(CEPH_BANNER));
+        bl.append(CEPH_BANNER, strlen(CEPH_BANNER));
         r = try_send(bl);
         if (r == 0) {
           state = STATE_CONNECTING_WAIT_BANNER_AND_IDENTIFY;
